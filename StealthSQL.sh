@@ -20,6 +20,24 @@ print_banner() {
 }
 
 
+generate_user_agent() {
+    local user_agents=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15"
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+        "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0"
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
+    )
+    local random_index=$((RANDOM % ${#user_agents[@]}))
+    echo "${user_agents[$random_index]}"
+}
+
+
 make_request() {
     local url="$1"
     local headers=()
@@ -226,8 +244,16 @@ main() {
     read -p "Enter the authentication token (if any, press Enter to skip): " auth_token
     read -p "Enter the proxy (if any, press Enter to skip): " proxy
     read -p "Enter custom headers (comma separated, if any, press Enter to skip): " custom_headers
-    read -p "Enter the User-Agent (if any, press Enter to use default): " user_agent
-    user_agent="${user_agent:-Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36}"
+
+    # Auto-generate User-Agent
+    user_agent=$(generate_user_agent)
+    echo -e "\n[+] Auto-generated User-Agent: $user_agent"
+    read -p "Use this User-Agent? (y/n, press Enter for yes): " ua_confirm
+    ua_confirm="${ua_confirm:-y}"
+    if [ "$ua_confirm" != "y" ]; then
+        read -p "Enter custom User-Agent: " custom_ua
+        user_agent="${custom_ua:-$user_agent}"
+    fi
 
     while true; do
         read -p "SQLi type [T/B]: " method
